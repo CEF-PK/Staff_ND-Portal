@@ -1,0 +1,15 @@
+CEF Pakistan Portal - Ministry & Budget Overview Addition
+
+This package is based on the uploaded V37 baseline. Existing features and files were preserved.
+Only the following ND feature was added:
+- Separate ND sidebar: Ministry Overview
+- Ministry totals for Prayer Meetings, Teaching Ministry and CEF Promotion
+- Region, city/district, individual staff and date-range filters
+- Ministry Overview PDF and Excel downloads with CEF branding and ND signature
+- Separate ND sidebar: Budget Overview
+- Total requested and approved budget
+- Region, city/district, individual staff and date-range filters
+- Budget Overview PDF and Excel downloads with CEF branding and ND signature
+
+No new SQL migration is required because the overview reads existing ministry_reports,
+staff_registration_requests and staff_budget_applications data.

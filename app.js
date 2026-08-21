@@ -7,7 +7,7 @@
 
   const $ = s => document.querySelector(s);
   const $$ = s => [...document.querySelectorAll(s)];
-  const state = {role:"staff", user:null, profile:null, nd:false, reports:[], training:[], budgets:[], salaries:[], notifications:[], events:[], leaves:[], reportDeadline:null, period:"month", month:new Date().toISOString().slice(0,7), page:"dashboard", applications:[], reportFilter:{city:"",region:""}, budgetFilter:{city:"",region:""}};
+  const state = {role:"staff", user:null, profile:null, nd:false, reports:[], training:[], budgets:[], salaries:[], notifications:[], events:[], leaves:[], reportDeadline:null, period:"month", month:new Date().toISOString().slice(0,7), page:"dashboard", applications:[], reportFilter:{city:"",region:""}, budgetFilter:{city:"",region:""},ministryOverviewFilter:{region:"",city:"",staff:"",from:"",to:""},budgetOverviewFilter:{region:"",city:"",staff:"",from:"",to:""}};
 
   const staffNav = [
     ["dashboard","⌂","Dashboard"],["report","＋","Add Ministry Report"],["reports","▤","My Reports"],
@@ -18,7 +18,7 @@
   ];
   const ndNav = [
     ["dashboard","⌂","Dashboard"],["applications","▣","Staff Applications"],["ndApplications","♜","ND Applications"],["staff","♙","Staff Directory"],
-    ["reports","▤","Ministry Reports"],["leaves","📝","Leave Applications"],["budgets","₨","Budgets & Applications"],["salaries","💰","Staff Salaries"],["suggestions","💡","Staff Suggestions"],["notifications","●","Notifications"],
+    ["reports","▤","Ministry Reports"],["ministryOverview","📊","Ministry Overview"],["leaves","📝","Leave Applications"],["budgets","₨","Budgets & Applications"],["budgetOverview","₨","Budget Overview"],["salaries","💰","Staff Salaries"],["suggestions","💡","Staff Suggestions"],["notifications","●","Notifications"],
     ["events","◷","Events & Training"],["deadline","⏰","Report Deadline"],["downloads","⇩","Downloads"],["settings","⚙","Settings"]
   ];
 
@@ -330,6 +330,143 @@
   function ndNotifications(){setHeader("Notifications","Send messages and files to individual staff members.");const staff=state.applications.filter(a=>a.status==="approved");return `<div class="grid two-col"><div class="card"><h3>Send Notification</h3><form id="notifyForm" class="form-grid"><label class="full">Staff<select name="recipient">${staff.map(s=>`<option value="${s.auth_user_id}">${esc(s.full_name)} — ${esc(s.staff_reg_no)}</option>`).join("")}</select></label><label class="full">Title<input name="title" required placeholder="Important ministry update"></label><label class="full">Message<textarea name="message" required placeholder="Write your message..."></textarea></label><div class="actions full"><button class="primary">SEND NOTIFICATION</button></div></form></div><div class="card"><h3>Recent Notifications</h3><div class="empty">Staff notifications sent from this portal appear in each recipient's Notifications page.</div></div></div>`}
   function ndEvents(){setHeader("Events & Training","Manage events and verified staff training records.");return `<div class="grid two-col"><div class="card"><div class="card-head"><h3>Upcoming Events</h3><button class="primary" id="eventAdd">＋ Add Event</button></div>${eventsHtml()}</div><div class="card"><div class="card-head"><h3>Training Management</h3><span>Use staff profile → training records</span></div><p class="kpi-note">Verified training records can be inserted/managed through the secured training table. The staff dashboard displays them automatically.</p></div></div>`}
   function ndDownloads(){setHeader("Downloads","Country-wide professional reports with staff information, CEF logo and ministry branding.");return `<div class="mission-banner"><div><span>CEF PAKISTAN NATIONAL REPORTING</span><b>CEF Mission: To evangelise every child.</b><p>Use filtered report pages for Punjab, Faisalabad and other locations, or download complete national records.</p></div></div><div class="grid panel-grid"><div class="card"><h3>National Ministry Report</h3><p class="kpi-note">All ministry records with the submitting staff member's information.</p><button class="primary" id="ndDownloadReports2">⇩ Download Excel</button><button class="outline" id="ndDownloadReportsPdf" style="margin-top:8px">⇩ Download PDF</button></div><div class="card"><h3>Ministry Directory</h3><p class="kpi-note">Staff name, registration number, city, region, designation, employment, contact and joining information.</p><button class="primary" id="ndStaffExcel2">⇩ Download Excel</button><button class="outline" id="ndStaffPdf2" style="margin-top:8px">⇩ Download PDF</button></div><div class="card"><h3>Budget Report</h3><p class="kpi-note">All ND budget records with staff information. Use Budget Review Center for filtered Punjab/Faisalabad reports.</p><button class="primary" id="ndBudgetDownloadExcel">⇩ Download Excel</button><button class="outline" id="ndBudgetDownloadPdf" style="margin-top:8px">⇩ Download A4 PDF</button></div><div class="card"><h3>Staff Applications</h3><button class="primary" id="ndDownloadApps">⇩ Download Excel</button><button class="outline" id="ndDownloadAppsPdf" style="margin-top:8px">⇩ Download PDF</button></div></div>`}
+
+  function overviewStaffList(){return state.applications.filter(a=>a.status==="approved")}
+  function overviewRegionOptions(){return [...new Set(overviewStaffList().map(a=>canonicalProvince(a.region,a.city)||a.region).filter(Boolean))].sort()}
+  function overviewCityOptions(){return [...new Set(overviewStaffList().map(a=>String(a.city||"").trim()).filter(Boolean))].sort()}
+  function overviewStaffOptions(){return overviewStaffList().sort((a,b)=>(a.full_name||"").localeCompare(b.full_name||""))}
+  function overviewMatches(a,f){
+    if(f.region && normPlace(canonicalProvince(a.region,a.city)||a.region)!==normPlace(f.region))return false;
+    if(f.city && normPlace(a.city)!==normPlace(f.city))return false;
+    if(f.staff && String(a.auth_user_id)!==String(f.staff))return false;
+    return true;
+  }
+  function overviewDateMatch(date,f){if(!date)return false;const d=String(date).slice(0,10);return (!f.from||d>=f.from)&&(!f.to||d<=f.to)}
+  function ministryOverviewRows(){
+    const f=state.ministryOverviewFilter||{}; return (state.reports||[]).filter(r=>{
+      const a=state.applications.find(x=>x.auth_user_id===r.staff_auth_user_id)||{};
+      return overviewMatches(a,f)&&overviewDateMatch(r.report_date,f);
+    });
+  }
+  function ministryOverviewSummary(rows){
+    const s={prayerMeetings:0,prayerPeople:0,prayerInvolved:0,teachingActivities:0,teachersTrained:0,teachersInvolved:0,promotionActivities:0,promotionPeople:0,promotionInvolved:0,activities:0,totalPeople:0,totalInvolved:0};
+    rows.forEach(r=>{
+      const g=String(r.ministry_group||"");
+      const activity=Number(r.activity_count||0);
+      const reached=Number(r.people_reached||0);
+      const involved=Number(r.people_involved||0);
+      s.activities+=activity;
+      if(g==="Prayer Meetings"){s.prayerMeetings+=Number(r.activity_count||r.prayer_meetings||0);s.prayerPeople+=reached;s.prayerInvolved+=involved;s.totalPeople+=reached;s.totalInvolved+=involved}
+      if(g==="Teaching Ministry"){s.teachingActivities+=activity;s.teachersTrained+=Number(r.teachers_trained||0);s.teachersInvolved+=Number(r.teachers_involved||0);s.totalPeople+=Number(r.teachersTrained||0);s.totalInvolved+=Number(r.teachers_involved||0)}
+      if(g==="CEF Promotion"){s.promotionActivities+=Number(r.activity_count||r.cef_promotions||0);s.promotionPeople+=reached;s.promotionInvolved+=involved;s.totalPeople+=reached;s.totalInvolved+=involved}
+    }); return s;
+  }
+  function overviewFilterCard(kind){
+    const f=kind==="ministry"?state.ministryOverviewFilter:state.budgetOverviewFilter;
+    const staff=overviewStaffOptions();
+    const regions=overviewRegionOptions(), cities=overviewCityOptions();
+    return `<div class="card overview-filters"><div class="card-head"><div><h3>Filters</h3><span>Choose region, city, individual staff member or a custom date range.</span></div><button class="outline" id="${kind}OverviewClear">Clear Filters</button></div>
+      <div class="form-grid">
+        <label>Region<select id="${kind}OverviewRegion"><option value="">All Regions</option>${regions.map(x=>`<option ${normPlace(f.region)===normPlace(x)?"selected":""}>${esc(x)}</option>`).join("")}</select></label>
+        <label>City / District<select id="${kind}OverviewCity"><option value="">All Cities</option>${cities.map(x=>`<option ${normPlace(f.city)===normPlace(x)?"selected":""}>${esc(x)}</option>`).join("")}</select></label>
+        <label class="full">Single Staff<select id="${kind}OverviewStaff"><option value="">All Staff</option>${staff.map(a=>`<option value="${esc(a.auth_user_id||"")}" ${String(f.staff)===String(a.auth_user_id)?"selected":""}>${esc(a.full_name||"Staff")} — ${esc(a.staff_reg_no||"")}</option>`).join("")}</select></label>
+        <label>From<input id="${kind}OverviewFrom" type="date" value="${esc(f.from||"")}"></label>
+        <label>To<input id="${kind}OverviewTo" type="date" value="${esc(f.to||"")}"></label>
+      </div></div>`;
+  }
+  function ndMinistryOverview(){
+    setHeader("Ministry Overview","Automatic ministry totals by region, city and individual staff member.");
+    const rows=ministryOverviewRows(), s=ministryOverviewSummary(rows), staffCount=new Set(rows.map(r=>r.staff_auth_user_id)).size;
+    return `<div class="mission-banner"><div><span>CEF PAKISTAN MINISTRY OVERVIEW</span><b>CEF Mission: To evangelise every child.</b><p>National totals are calculated directly from submitted staff ministry reports. Totals represent reported activity counts and participation/reach; repeated participation across different activities is counted in each submitted report.</p></div></div>
+      ${overviewFilterCard("ministry")}
+      <div class="grid stats">
+        <div class="stat blue"><div class="stat-icon">🙏</div><b>${s.prayerMeetings.toLocaleString()}</b><span>Prayer Meetings</span><small>${s.prayerPeople.toLocaleString()} Participants • ${s.prayerInvolved.toLocaleString()} Involved</small></div>
+        <div class="stat green"><div class="stat-icon">🎓</div><b>${s.teachingActivities.toLocaleString()}</b><span>Teaching Activities</span><small>${s.teachersTrained.toLocaleString()} Trained • ${s.teachersInvolved.toLocaleString()} Involved</small></div>
+        <div class="stat red"><div class="stat-icon">⚑</div><b>${s.promotionActivities.toLocaleString()}</b><span>CEF Promotions</span><small>${s.promotionPeople.toLocaleString()} Reached • ${s.promotionInvolved.toLocaleString()} Involved</small></div>
+        <div class="stat blue"><div class="stat-icon">◉</div><b>${s.totalInvolved.toLocaleString()}</b><span>Total People Involved</span><small>${s.totalPeople.toLocaleString()} Reported Participants / Trained</small></div>
+      </div>
+      <div class="card"><div class="card-head"><div><h3>Ministry Totals</h3><span>Complete summary for the current region, city, staff and date filters.</span></div><div class="actions"><button class="primary" id="ministryOverviewExcel">⇩ Download Excel</button><button class="outline" id="ministryOverviewPdf">⇩ Download PDF</button></div></div>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Ministry</th><th>Activities</th><th>Participants / Reach / Trained</th><th>People Involved in CEF</th></tr></thead><tbody>
+      <tr><td><b>Prayer Meetings</b></td><td>${s.prayerMeetings.toLocaleString()}</td><td>${s.prayerPeople.toLocaleString()}</td><td>${s.prayerInvolved.toLocaleString()}</td></tr>
+      <tr><td><b>Teaching Ministry</b></td><td>${s.teachingActivities.toLocaleString()}</td><td>${s.teachersTrained.toLocaleString()} trained</td><td>${s.teachersInvolved.toLocaleString()}</td></tr>
+      <tr><td><b>CEF Promotion</b></td><td>${s.promotionActivities.toLocaleString()}</td><td>${s.promotionPeople.toLocaleString()}</td><td>${s.promotionInvolved.toLocaleString()}</td></tr>
+      <tr><td><b>ALL MINISTRIES</b></td><td>${s.activities.toLocaleString()}</td><td>${s.totalPeople.toLocaleString()}</td><td><b>${s.totalInvolved.toLocaleString()}</b></td></tr>
+      </tbody></table></div></div>`;
+  }
+  function budgetOverviewRows(){
+    const f=state.budgetOverviewFilter||{};
+    return (state.budgets||[]).filter(b=>{
+      const a=staffForBudget(b);
+      return overviewMatches(a,f)&&overviewDateMatch(b.created_at||b.payment_date||"",f);
+    }).map(b=>{const a=staffForBudget(b);return {"Staff Registration No.":a.staff_reg_no||"","Staff Name":a.full_name||"","City":budgetCity(b)||a.city||"","Region":budgetRegion(b)||a.region||"","Budget Title":b.title||"","Requested (PKR)":Number(b.amount||0),"Approved (PKR)":Number(b.approved_amount||0),"Status":b.status||"","Created":String(b.created_at||"").slice(0,10)}});
+  }
+  function ndBudgetOverview(){
+    setHeader("Budget Overview","Automatic budget totals by region, city and individual staff member.");
+    const rows=budgetOverviewRows(), requested=rows.reduce((n,r)=>n+Number(r["Requested (PKR)"]||0),0), approved=rows.reduce((n,r)=>n+Number(r["Approved (PKR)"]||0),0);
+    return `<div class="mission-banner"><div><span>CEF PAKISTAN BUDGET OVERVIEW</span><b>Budget totals by Region, City and Staff.</b><p>Filter the complete budget picture or select one staff member for an individual total.</p></div></div>
+      ${overviewFilterCard("budget")}
+      <div class="grid stats">
+        <div class="stat blue"><div class="stat-icon">₨</div><b>₨ ${requested.toLocaleString()}</b><span>Total Requested</span><small>${rows.length} Budget Records</small></div>
+        <div class="stat green"><div class="stat-icon">₨</div><b>₨ ${approved.toLocaleString()}</b><span>Total Approved</span><small>Current filtered total</small></div>
+        <div class="stat red"><div class="stat-icon">Δ</div><b>₨ ${Math.max(0,requested-approved).toLocaleString()}</b><span>Pending / Difference</span><small>Requested minus approved</small></div>
+      </div>
+      <div class="card"><div class="card-head"><div><h3>Budget Summary</h3><span>Region-wise, city-wise or single-staff results.</span></div><div class="actions"><button class="primary" id="budgetOverviewExcel">⇩ Download Excel</button><button class="outline" id="budgetOverviewPdf">⇩ Download PDF</button></div></div>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Staff</th><th>City</th><th>Region</th><th>Requested</th><th>Approved</th><th>Status</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(r["Staff Name"])}<br><small>${esc(r["Staff Registration No."])}</small></td><td>${esc(r.City)}</td><td>${esc(r.Region)}</td><td>₨ ${Number(r["Requested (PKR)"]).toLocaleString()}</td><td>₨ ${Number(r["Approved (PKR)"]).toLocaleString()}</td><td>${esc(r.Status||"—")}</td></tr>`).join(""):'<tr><td colspan="6" class="empty">No budget records match these filters.</td></tr>'}</tbody></table></div></div>`;
+  }
+  async function downloadMinistryOverviewPDF(rows,s,title="CEF Pakistan Ministry Overview"){
+    if(!window.jspdf){toast("PDF library is not loaded. Refresh the portal.",false);return}
+    const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    await addLogoAndHeader(doc,title);
+    doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(15,61,115);doc.text("FILTERED MINISTRY SUMMARY",10,40);
+    doc.setFont("helvetica","normal");doc.setTextColor(0,0,0);doc.setFontSize(7.5);
+    const f=state.ministryOverviewFilter||{};
+    doc.text(`Region: ${f.region||"All"}   City/District: ${f.city||"All"}   Staff: ${f.staff?((overviewStaffOptions().find(a=>String(a.auth_user_id)===String(f.staff))||{}).full_name||"Selected staff"):"All Staff"}`,10,46);
+    doc.text(`Period: ${f.from||"All dates"} to ${f.to||"All dates"}   Staff Reporting: ${new Set(rows.map(r=>r.staff_auth_user_id)).size}`,10,51);
+    const body=[
+      ["Prayer Meetings",s.prayerMeetings,s.prayerPeople,s.prayerInvolved,"Participants"],
+      ["Teaching Ministry",s.teachingActivities,s.teachersTrained,s.teachersInvolved,"Teachers Trained"],
+      ["CEF Promotion",s.promotionActivities,s.promotionPeople,s.promotionInvolved,"People Reached"],
+      ["ALL MINISTRIES",s.activities,s.totalPeople,s.totalInvolved,"Combined Reported Total"]
+    ];
+    doc.autoTable({startY:57,head:[["Ministry","Activities","Participants / Reach / Trained","People Involved in CEF","Measure"]],body,theme:"grid",styles:{fontSize:7.5,cellPadding:2.8,overflow:"linebreak"},headStyles:{fillColor:[15,61,115],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[245,248,252]},margin:{left:8,right:8}});
+    let y=doc.lastAutoTable.finalY+9;
+    doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text("INTERPRETATION",10,y);y+=5;
+    doc.setFont("helvetica","normal");doc.setFontSize(7.5);
+    const note=doc.splitTextToSize("Totals are calculated from staff-submitted ministry reports. People involved means the number entered by staff as now involved in CEF ministry. The totals are report-based and are not de-duplicated across separate activities.",190);doc.text(note,10,y);
+    y+=note.length*4+8;
+    if(y>255){doc.addPage();y=20}
+    doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text("STAFF-BY-MINISTRY DETAILS",10,y);y+=4;
+    const detail=rows.map(r=>{const a=state.applications.find(x=>x.auth_user_id===r.staff_auth_user_id)||{};const g=String(r.ministry_group||"Other");const reach=g==="Teaching Ministry"?Number(r.teachers_trained||0):Number(r.people_reached||0);const inv=g==="Teaching Ministry"?Number(r.teachers_involved||0):Number(r.people_involved||0);return [a.staff_reg_no||"",a.full_name||"",a.city||"",a.region||provinceForCity(a.city)||"",r.report_date||"",g,r.activity_count||0,reach,inv]});
+    doc.autoTable({startY:y,head:[["Reg. No.","Staff","City","Region","Date","Ministry","Activities","Reach/Trained","Involved"]],body:detail,theme:"grid",styles:{fontSize:5.5,cellPadding:1.5,overflow:"linebreak"},headStyles:{fillColor:[149,21,59],textColor:255,fontStyle:"bold"},alternateRowStyles:{fillColor:[250,247,243]},margin:{left:6,right:6}});
+    doc.setFontSize(7);doc.text("CEF Pakistan • Ministry Overview",10,288);await addNDSignature(doc,145,272,45,13);doc.text("National Director",145,288);doc.save("cef-pakistan-ministry-overview.pdf");toast("Complete ministry overview PDF downloaded with ministry totals and people involved.");
+  }
+  async function downloadMinistryOverviewExcel(rows,s){
+    if(!window.ExcelJS){toast("Excel library is not loaded. Refresh the portal.",false);return}
+    try{
+      const wb=new ExcelJS.Workbook();wb.creator="CEF Pakistan";wb.created=new Date();
+      const ws=wb.addWorksheet("Ministry Overview");
+      const logo=await assetDataUrl("assets/cef-logo-report.png");const img=wb.addImage({base64:logo,extension:"png"});
+      ws.addImage(img,{tl:{col:0,row:0},ext:{width:100,height:48}});ws.mergeCells("C1:F2");ws.getCell("C1").value="CEF PAKISTAN — MINISTRY OVERVIEW";ws.getCell("C1").font={bold:true,size:16,color:{argb:"FFFFFFFF"}};ws.getCell("C1").fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF0F3D73"}};ws.getCell("C1").alignment={horizontal:"center",vertical:"middle"};
+      const f=state.ministryOverviewFilter||{};const selectedStaff=f.staff?(overviewStaffOptions().find(a=>String(a.auth_user_id)===String(f.staff))||{}):{};
+      ws.mergeCells("A3:F3");ws.getCell("A3").value=`Region: ${f.region||"All"} | City/District: ${f.city||"All"} | Staff: ${selectedStaff.full_name||"All Staff"} | Period: ${f.from||"All"} to ${f.to||"All"}`;ws.getCell("A3").font={italic:true,color:{argb:"FF334155"}};
+      ws.addRow([]);ws.addRow(["Ministry","Activities","Participants / Reach / Trained","People Involved in CEF","Additional Measure","Notes"]);
+      const hr=ws.getRow(5);hr.font={bold:true,color:{argb:"FFFFFFFF"}};hr.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF95304A"}};hr.alignment={wrapText:true,vertical:"middle"};
+      ws.addRow(["Prayer Meetings",s.prayerMeetings,s.prayerPeople,s.prayerInvolved,"Participants","Total reported prayer-meeting participants and people now involved in CEF."]);
+      ws.addRow(["Teaching Ministry",s.teachingActivities,s.teachersTrained,s.teachersInvolved,"Teachers Trained","People trained and people from those trained now involved in CEF."]);
+      ws.addRow(["CEF Promotion",s.promotionActivities,s.promotionPeople,s.promotionInvolved,"People Reached","People reached through CEF promotion and people now involved in CEF."]);
+      ws.addRow(["ALL MINISTRIES",s.activities,s.totalPeople,s.totalInvolved,"Combined Total","Report-based total; not de-duplicated across separate activities."]);
+      ws.columns=[{width:24},{width:14},{width:28},{width:25},{width:24},{width:55}];styleExcelSheet(ws);
+      const detail=wb.addWorksheet("Staff Ministry Details");detail.addRow(["Staff Registration No.","Staff Name","City","Region","Date","Ministry","Activities","Participants / Reach / Trained","People Involved in CEF"]);
+      const dh=detail.getRow(1);dh.font={bold:true,color:{argb:"FFFFFFFF"}};dh.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF1B5E9E"}};dh.alignment={wrapText:true,vertical:"middle"};
+      rows.forEach(r=>{const a=state.applications.find(x=>x.auth_user_id===r.staff_auth_user_id)||{};const g=String(r.ministry_group||"Other");detail.addRow([a.staff_reg_no||"",a.full_name||"",a.city||"",a.region||provinceForCity(a.city)||"",r.report_date||"",g,Number(r.activity_count||0),g==="Teaching Ministry"?Number(r.teachers_trained||0):Number(r.people_reached||0),g==="Teaching Ministry"?Number(r.teachers_involved||0):Number(r.people_involved||0)]);});
+      detail.columns=[{width:22},{width:24},{width:18},{width:18},{width:14},{width:24},{width:14},{width:28},{width:24}];styleExcelSheet(detail);detail.views=[{state:"frozen",ySplit:1}];detail.autoFilter={from:"A1",to:`I${detail.rowCount}`};
+      const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="cef-pakistan-ministry-overview.xlsx";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast("Complete ministry overview Excel downloaded with totals and staff details.");
+    }catch(e){toast(authError(e),false)}
+  }
+  function downloadBudgetOverviewExcel(rows,requested,approved){
+    const data=[...rows,{"Staff Registration No.":"","Staff Name":"TOTAL","City":"","Region":"","Budget Title":"","Requested (PKR)":requested,"Approved (PKR)":approved,"Status":"","Created":""}];
+    makeBudgetExcel(data,"cef-pakistan-budget-overview.xlsx","CEF Pakistan Budget Overview");
+  }
   function ndDeadline(){
     setHeader("Report Deadline","Set the monthly ministry report submission deadline that every staff member will see.");
     const current=deadlineInfo().date;
@@ -384,7 +521,9 @@
       else if(state.page==="staff")h=staffDirectory();
       else if(state.page==="leaves")h=ndLeaves();
       else if(state.page==="reports")h=ndReports();
+      else if(state.page==="ministryOverview")h=ndMinistryOverview();
       else if(state.page==="budgets")h=ndBudgets();
+      else if(state.page==="budgetOverview")h=ndBudgetOverview();
       else if(state.page==="salaries")h=ndSalaries();
       else if(state.page==="suggestions")h=ndSuggestions();
       else if(state.page==="notifications")h=ndNotifications();
@@ -448,6 +587,23 @@
     if($("#ndRegionFilter"))$("#ndRegionFilter").onchange=e=>{state.reportFilter.region=e.target.value;render()};
     if($("#ndBudgetCityFilter"))$("#ndBudgetCityFilter").onchange=e=>{state.reportFilter.city=e.target.value;render()};
     if($("#ndBudgetRegionFilter"))$("#ndBudgetRegionFilter").onchange=e=>{state.reportFilter.region=e.target.value;render()};
+    if($("#ministryOverviewRegion"))$("#ministryOverviewRegion").onchange=e=>{state.ministryOverviewFilter.region=e.target.value;render()};
+    if($("#ministryOverviewCity"))$("#ministryOverviewCity").onchange=e=>{state.ministryOverviewFilter.city=e.target.value;render()};
+    if($("#ministryOverviewStaff"))$("#ministryOverviewStaff").onchange=e=>{state.ministryOverviewFilter.staff=e.target.value;render()};
+    if($("#ministryOverviewFrom"))$("#ministryOverviewFrom").onchange=e=>{state.ministryOverviewFilter.from=e.target.value;render()};
+    if($("#ministryOverviewTo"))$("#ministryOverviewTo").onchange=e=>{state.ministryOverviewFilter.to=e.target.value;render()};
+    if($("#ministryOverviewClear"))$("#ministryOverviewClear").onclick=()=>{state.ministryOverviewFilter={region:"",city:"",staff:"",from:"",to:""};render()};
+    if($("#budgetOverviewRegion"))$("#budgetOverviewRegion").onchange=e=>{state.budgetOverviewFilter.region=e.target.value;render()};
+    if($("#budgetOverviewCity"))$("#budgetOverviewCity").onchange=e=>{state.budgetOverviewFilter.city=e.target.value;render()};
+    if($("#budgetOverviewStaff"))$("#budgetOverviewStaff").onchange=e=>{state.budgetOverviewFilter.staff=e.target.value;render()};
+    if($("#budgetOverviewFrom"))$("#budgetOverviewFrom").onchange=e=>{state.budgetOverviewFilter.from=e.target.value;render()};
+    if($("#budgetOverviewTo"))$("#budgetOverviewTo").onchange=e=>{state.budgetOverviewFilter.to=e.target.value;render()};
+    if($("#budgetOverviewClear"))$("#budgetOverviewClear").onclick=()=>{state.budgetOverviewFilter={region:"",city:"",staff:"",from:"",to:""};render()};
+    if($("#ministryOverviewExcel"))$("#ministryOverviewExcel").onclick=()=>downloadMinistryOverviewExcel(ministryOverviewRows(),ministryOverviewSummary(ministryOverviewRows()));
+    if($("#ministryOverviewPdf"))$("#ministryOverviewPdf").onclick=()=>{const rows=ministryOverviewRows(),s=ministryOverviewSummary(rows);downloadMinistryOverviewPDF(rows,s)};
+    if($("#budgetOverviewExcel"))$("#budgetOverviewExcel").onclick=()=>{const rows=budgetOverviewRows(),req=rows.reduce((n,r)=>n+Number(r["Requested (PKR)"]||0),0),app=rows.reduce((n,r)=>n+Number(r["Approved (PKR)"]||0),0);downloadBudgetOverviewExcel(rows,req,app)};
+    if($("#budgetOverviewPdf"))$("#budgetOverviewPdf").onclick=()=>{const rows=budgetOverviewRows(),req=rows.reduce((n,r)=>n+Number(r["Requested (PKR)"]||0),0),app=rows.reduce((n,r)=>n+Number(r["Approved (PKR)"]||0),0);downloadBudgetOverviewPDF(rows,req,app)};
+
     if($("#notifyForm"))$("#notifyForm").onsubmit=sendNotification;
     if($("#eventAdd"))$("#eventAdd").onclick=openEventModal;
     if($("#deadlineForm"))$("#deadlineForm").onsubmit=saveReportDeadline;
